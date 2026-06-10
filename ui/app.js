@@ -34,6 +34,22 @@
 
   var brushControls = [brushToggle, brushColorInput, brushSizeInput, paintModeBtn, eraseModeBtn];
 
+  // Crop panel
+  var cropToggle = document.getElementById("crop-toggle");
+  var cropApplyBtn = document.getElementById("crop-apply");
+  var cropCancelBtn = document.getElementById("crop-cancel");
+  var cropOverlay = document.getElementById("crop-overlay");
+  var cropRectEl = document.getElementById("crop-rect");
+  var cropReadout = document.getElementById("crop-size-readout");
+
+  // Resize panel
+  var resizeWidthInput = document.getElementById("resize-width");
+  var resizeHeightInput = document.getElementById("resize-height");
+  var resizeLockBtn = document.getElementById("resize-lock");
+  var resizeApplyBtn = document.getElementById("resize-apply");
+
+  var resizeControls = [resizeWidthInput, resizeHeightInput, resizeLockBtn, resizeApplyBtn];
+
   var imageLoaded = false;
 
   // The untouched ("baked") image lives on an offscreen canvas; the visible
@@ -105,15 +121,25 @@
     render();
   }
 
-  function setLoadedState(loaded, width, height) {
+  function updateImageInfo() {
+    imageInfo.textContent = imageLoaded
+      ? sourceCanvas.width + " × " + sourceCanvas.height + " px"
+      : "No image";
+  }
+
+  function setLoadedState(loaded) {
     imageLoaded = loaded;
     downloadBtn.disabled = !loaded;
     adjustControls.forEach(function (el) { el.disabled = !loaded; });
     brushControls.forEach(function (el) { el.disabled = !loaded; });
-    if (!loaded) setBrushActive(false);
+    resizeControls.forEach(function (el) { el.disabled = !loaded; });
+    cropToggle.disabled = !loaded;
+    setBrushActive(false);
+    setCropActive(false);
+    if (loaded) syncResizeInputs();
     dropHint.hidden = loaded;
     canvasFrame.hidden = !loaded;
-    imageInfo.textContent = loaded ? width + " × " + height + " px" : "No image";
+    updateImageInfo();
   }
 
   function loadFile(file) {
@@ -126,7 +152,7 @@
       sourceCanvas.height = img.naturalHeight;
       sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
       sourceCtx.drawImage(img, 0, 0);
-      setLoadedState(true, sourceCanvas.width, sourceCanvas.height);
+      setLoadedState(true);
       resetControls();
       render();
     };
@@ -163,6 +189,7 @@
 
   function setBrushActive(active) {
     brushActive = active && imageLoaded;
+    if (brushActive) setCropActive(false);
     brushToggle.setAttribute("aria-pressed", brushActive ? "true" : "false");
     canvas.classList.toggle("brush-active", brushActive);
   }
@@ -280,6 +307,218 @@
     brushSizeValue.textContent = brushSizeInput.value;
   });
 
+  // ---------- Crop ----------
+  //
+  // The overlay sits exactly on top of the canvas. A drag defines a selection
+  // in display pixels; on apply it is converted to image pixels and the baked
+  // image is cut down to that rectangle.
+
+  var cropActive = false;
+  var cropDragging = false;
+  var cropPointerId = null;
+  var cropDragStart = null;
+  var cropSel = null; // {x, y, w, h} in overlay display px
+
+  function setCropActive(active) {
+    cropActive = active && imageLoaded;
+    if (cropActive) setBrushActive(false);
+    cropToggle.setAttribute("aria-pressed", cropActive ? "true" : "false");
+    cropOverlay.hidden = !cropActive;
+    if (!cropActive) clearCropSelection();
+    updateCropButtons();
+  }
+
+  function clearCropSelection() {
+    cropDragging = false;
+    cropPointerId = null;
+    cropDragStart = null;
+    cropSel = null;
+    cropRectEl.hidden = true;
+    updateCropButtons();
+  }
+
+  function updateCropButtons() {
+    cropApplyBtn.disabled = !imageLoaded || !cropActive || !cropSelectionPixels();
+    cropCancelBtn.disabled = !imageLoaded || !cropActive;
+  }
+
+  // Pointer position clamped to the overlay (i.e. the displayed image).
+  function overlayPoint(e) {
+    var r = cropOverlay.getBoundingClientRect();
+    return {
+      x: Math.min(Math.max(e.clientX - r.left, 0), r.width),
+      y: Math.min(Math.max(e.clientY - r.top, 0), r.height)
+    };
+  }
+
+  // Selection converted to whole image pixels (at least 1×1), or null.
+  function cropSelectionPixels() {
+    if (!cropSel || cropSel.w < 1 || cropSel.h < 1) return null;
+    var r = cropOverlay.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    var scaleX = sourceCanvas.width / r.width;
+    var scaleY = sourceCanvas.height / r.height;
+    var sx = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(cropSel.x * scaleX)));
+    var sy = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(cropSel.y * scaleY)));
+    var ex = Math.max(sx + 1, Math.min(sourceCanvas.width, Math.round((cropSel.x + cropSel.w) * scaleX)));
+    var ey = Math.max(sy + 1, Math.min(sourceCanvas.height, Math.round((cropSel.y + cropSel.h) * scaleY)));
+    return { x: sx, y: sy, w: ex - sx, h: ey - sy };
+  }
+
+  function setCropSelection(a, b) {
+    cropSel = {
+      x: Math.min(a.x, b.x),
+      y: Math.min(a.y, b.y),
+      w: Math.abs(a.x - b.x),
+      h: Math.abs(a.y - b.y)
+    };
+    cropRectEl.hidden = false;
+    cropRectEl.style.left = cropSel.x + "px";
+    cropRectEl.style.top = cropSel.y + "px";
+    cropRectEl.style.width = cropSel.w + "px";
+    cropRectEl.style.height = cropSel.h + "px";
+    var px = cropSelectionPixels();
+    cropReadout.textContent = (px ? px.w + " × " + px.h : "0 × 0") + " px";
+    updateCropButtons();
+  }
+
+  function endCropDrag() {
+    if (!cropDragging) return;
+    cropDragging = false;
+    cropPointerId = null;
+    cropDragStart = null;
+    // A click without a real drag leaves no useful selection.
+    if (cropSel && (cropSel.w < 3 || cropSel.h < 3)) clearCropSelection();
+    updateCropButtons();
+  }
+
+  function applyCrop() {
+    var sel = cropSelectionPixels();
+    if (!sel || !imageLoaded) return;
+    var tmp = document.createElement("canvas");
+    tmp.width = sel.w;
+    tmp.height = sel.h;
+    tmp.getContext("2d").drawImage(sourceCanvas, sel.x, sel.y, sel.w, sel.h, 0, 0, sel.w, sel.h);
+    sourceCanvas.width = sel.w;
+    sourceCanvas.height = sel.h;
+    sourceCtx.drawImage(tmp, 0, 0);
+    setCropActive(false);
+    syncResizeInputs();
+    render();
+    updateImageInfo();
+  }
+
+  cropOverlay.addEventListener("pointerdown", function (e) {
+    if (!cropActive || cropDragging) return;
+    if (e.button !== 0 && e.button !== -1) return;
+    e.preventDefault();
+    cropDragging = true;
+    cropPointerId = e.pointerId;
+    if (cropOverlay.setPointerCapture) {
+      try { cropOverlay.setPointerCapture(e.pointerId); } catch (err) { /* capture is best-effort */ }
+    }
+    cropDragStart = overlayPoint(e);
+    setCropSelection(cropDragStart, cropDragStart);
+  });
+
+  cropOverlay.addEventListener("pointermove", function (e) {
+    if (!cropDragging || e.pointerId !== cropPointerId) return;
+    e.preventDefault();
+    setCropSelection(cropDragStart, overlayPoint(e));
+  });
+
+  cropOverlay.addEventListener("pointerup", function (e) {
+    if (e.pointerId === cropPointerId) endCropDrag();
+  });
+  cropOverlay.addEventListener("pointercancel", function (e) {
+    if (e.pointerId === cropPointerId) endCropDrag();
+  });
+
+  cropToggle.addEventListener("click", function () { setCropActive(!cropActive); });
+  cropApplyBtn.addEventListener("click", applyCrop);
+  cropCancelBtn.addEventListener("click", function () { setCropActive(false); });
+
+  // ---------- Resize ----------
+
+  var MAX_DIM = 10000;
+  var aspectRatio = 1;
+
+  function syncResizeInputs() {
+    resizeWidthInput.value = sourceCanvas.width;
+    resizeHeightInput.value = sourceCanvas.height;
+    aspectRatio = sourceCanvas.width / sourceCanvas.height;
+  }
+
+  function parseDim(input) {
+    var n = Math.round(Number(input.value));
+    if (!isFinite(n) || n < 1) return null;
+    return Math.min(n, MAX_DIM);
+  }
+
+  function aspectLocked() {
+    return isPressed(resizeLockBtn);
+  }
+
+  function applyResize() {
+    if (!imageLoaded) return;
+    var w = parseDim(resizeWidthInput);
+    var h = parseDim(resizeHeightInput);
+    if (!w || !h) {
+      syncResizeInputs();
+      return;
+    }
+    resizeWidthInput.value = w;
+    resizeHeightInput.value = h;
+    if (w === sourceCanvas.width && h === sourceCanvas.height) return;
+    var tmp = document.createElement("canvas");
+    tmp.width = w;
+    tmp.height = h;
+    var tmpCtx = tmp.getContext("2d");
+    tmpCtx.imageSmoothingEnabled = true;
+    if ("imageSmoothingQuality" in tmpCtx) tmpCtx.imageSmoothingQuality = "high";
+    tmpCtx.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, 0, 0, w, h);
+    sourceCanvas.width = w;
+    sourceCanvas.height = h;
+    sourceCtx.drawImage(tmp, 0, 0);
+    aspectRatio = w / h;
+    render();
+    updateImageInfo();
+  }
+
+  resizeWidthInput.addEventListener("input", function () {
+    if (!aspectLocked() || !(aspectRatio > 0)) return;
+    var w = parseDim(resizeWidthInput);
+    if (w) resizeHeightInput.value = Math.max(1, Math.round(w / aspectRatio));
+  });
+
+  resizeHeightInput.addEventListener("input", function () {
+    if (!aspectLocked() || !(aspectRatio > 0)) return;
+    var h = parseDim(resizeHeightInput);
+    if (h) resizeWidthInput.value = Math.max(1, Math.round(h * aspectRatio));
+  });
+
+  [resizeWidthInput, resizeHeightInput].forEach(function (input) {
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyResize();
+      }
+    });
+  });
+
+  resizeLockBtn.addEventListener("click", function () {
+    var locking = !aspectLocked();
+    resizeLockBtn.setAttribute("aria-pressed", locking ? "true" : "false");
+    if (locking) {
+      // Re-lock at the proportions currently in the inputs (image as fallback).
+      var w = parseDim(resizeWidthInput);
+      var h = parseDim(resizeHeightInput);
+      aspectRatio = (w && h) ? w / h : sourceCanvas.width / sourceCanvas.height;
+    }
+  });
+
+  resizeApplyBtn.addEventListener("click", applyResize);
+
   openBtn.addEventListener("click", openPicker);
   dropHint.addEventListener("click", openPicker);
   downloadBtn.addEventListener("click", downloadPNG);
@@ -331,17 +570,25 @@
 
   // Keyboard shortcuts
   window.addEventListener("keydown", function (e) {
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b") {
+    if (e.key === "Escape") {
+      if (cropActive) {
+        e.preventDefault();
+        setCropActive(false);
+      }
+      return;
+    }
+    var key = e.key.toLowerCase();
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (key === "b" || key === "c")) {
       var target = e.target;
       var typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
       if (!typing && imageLoaded) {
         e.preventDefault();
-        setBrushActive(!brushActive);
+        if (key === "b") setBrushActive(!brushActive);
+        else setCropActive(!cropActive);
       }
       return;
     }
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-    var key = e.key.toLowerCase();
     if (key === "o") {
       e.preventDefault();
       openPicker();
