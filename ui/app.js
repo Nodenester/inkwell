@@ -50,6 +50,24 @@
 
   var resizeControls = [resizeWidthInput, resizeHeightInput, resizeLockBtn, resizeApplyBtn];
 
+  // Transform panel
+  var rotateCwBtn = document.getElementById("rotate-cw");
+  var rotateCcwBtn = document.getElementById("rotate-ccw");
+  var flipHBtn = document.getElementById("flip-h");
+  var flipVBtn = document.getElementById("flip-v");
+
+  var transformControls = [rotateCwBtn, rotateCcwBtn, flipHBtn, flipVBtn];
+
+  // View (zoom) panel + status bar
+  var zoomInBtn = document.getElementById("zoom-in");
+  var zoomOutBtn = document.getElementById("zoom-out");
+  var zoomFitBtn = document.getElementById("zoom-fit");
+  var zoom100Btn = document.getElementById("zoom-100");
+  var zoomReadout = document.getElementById("zoom-readout");
+  var zoomStatus = document.getElementById("zoom-status");
+
+  var viewControls = [zoomInBtn, zoomOutBtn, zoomFitBtn, zoom100Btn];
+
   // History panel
   var undoBtn = document.getElementById("undo-btn");
   var redoBtn = document.getElementById("redo-btn");
@@ -94,6 +112,7 @@
     if (typeof ctx.filter === "string") ctx.filter = filterString();
     ctx.drawImage(sourceCanvas, 0, 0);
     if (typeof ctx.filter === "string") ctx.filter = "none";
+    applyZoom();
   }
 
   function updateValueLabel(input) {
@@ -141,14 +160,20 @@
     adjustControls.forEach(function (el) { el.disabled = !loaded; });
     brushControls.forEach(function (el) { el.disabled = !loaded; });
     resizeControls.forEach(function (el) { el.disabled = !loaded; });
+    transformControls.forEach(function (el) { el.disabled = !loaded; });
+    viewControls.forEach(function (el) { el.disabled = !loaded; });
     cropToggle.disabled = !loaded;
     setBrushActive(false);
     setCropActive(false);
     if (loaded) syncResizeInputs();
+    // Every fresh image starts fitted to the view.
+    zoomFit = true;
+    zoomLevel = 1;
     dropHint.hidden = loaded;
     canvasFrame.hidden = !loaded;
     updateHistoryButtons();
     updateImageInfo();
+    applyZoom();
   }
 
   function loadFile(file) {
@@ -533,6 +558,152 @@
 
   resizeApplyBtn.addEventListener("click", applyResize);
 
+  // ---------- Transform (rotate / flip) ----------
+  //
+  // Each transform redraws the baked image through a rotated/mirrored context
+  // onto a temp canvas, copies it back, and snapshots history — so transforms
+  // bake immediately and undo/redo like any other edit.
+
+  function applyTransform(kind) {
+    if (!imageLoaded || stroking || cropDragging) return;
+    var w = sourceCanvas.width;
+    var h = sourceCanvas.height;
+    var rotated = kind === "cw" || kind === "ccw";
+    var tmp = document.createElement("canvas");
+    tmp.width = rotated ? h : w;
+    tmp.height = rotated ? w : h;
+    var t = tmp.getContext("2d");
+    if (kind === "cw") {
+      t.translate(tmp.width, 0);
+      t.rotate(Math.PI / 2);
+    } else if (kind === "ccw") {
+      t.translate(0, tmp.height);
+      t.rotate(-Math.PI / 2);
+    } else if (kind === "flip-h") {
+      t.translate(w, 0);
+      t.scale(-1, 1);
+    } else {
+      t.translate(0, h);
+      t.scale(1, -1);
+    }
+    t.drawImage(sourceCanvas, 0, 0);
+    sourceCanvas.width = tmp.width;
+    sourceCanvas.height = tmp.height;
+    sourceCtx.drawImage(tmp, 0, 0);
+    // A pending crop selection no longer matches the reoriented image.
+    if (cropActive) setCropActive(false);
+    syncResizeInputs();
+    render();
+    updateImageInfo();
+    pushHistory();
+  }
+
+  rotateCwBtn.addEventListener("click", function () { applyTransform("cw"); });
+  rotateCcwBtn.addEventListener("click", function () { applyTransform("ccw"); });
+  flipHBtn.addEventListener("click", function () { applyTransform("flip-h"); });
+  flipVBtn.addEventListener("click", function () { applyTransform("flip-v"); });
+
+  // ---------- View zoom ----------
+  //
+  // Zoom only changes the canvas element's CSS size; the bitmap (and the
+  // exported PNG) stays at full image resolution. "Fit" recomputes on every
+  // render and window resize so the image always fills the available view
+  // (never upscaled past 100%).
+
+  var ZOOM_STEPS = [0.05, 0.1, 0.15, 0.25, 0.33, 0.5, 0.67, 1, 1.5, 2, 3, 4, 6, 8];
+  var ZOOM_MIN = ZOOM_STEPS[0];
+  var ZOOM_MAX = ZOOM_STEPS[ZOOM_STEPS.length - 1];
+  var zoomFit = true;
+  var zoomLevel = 1;
+
+  // Workspace space left for the canvas once workspace + frame chrome is gone.
+  function availableViewSize() {
+    var ws = getComputedStyle(workspace);
+    var fr = getComputedStyle(canvasFrame);
+    var chromeW = parseFloat(ws.paddingLeft) + parseFloat(ws.paddingRight)
+      + parseFloat(fr.paddingLeft) + parseFloat(fr.paddingRight)
+      + parseFloat(fr.borderLeftWidth) + parseFloat(fr.borderRightWidth);
+    var chromeH = parseFloat(ws.paddingTop) + parseFloat(ws.paddingBottom)
+      + parseFloat(fr.paddingTop) + parseFloat(fr.paddingBottom)
+      + parseFloat(fr.borderTopWidth) + parseFloat(fr.borderBottomWidth);
+    return {
+      w: Math.max(1, workspace.clientWidth - chromeW),
+      h: Math.max(1, workspace.clientHeight - chromeH)
+    };
+  }
+
+  function fitScale() {
+    if (!sourceCanvas.width || !sourceCanvas.height) return 1;
+    var avail = availableViewSize();
+    var s = Math.min(avail.w / sourceCanvas.width, avail.h / sourceCanvas.height);
+    if (!isFinite(s) || s <= 0) return 1;
+    return Math.min(s, 1);
+  }
+
+  function currentZoom() {
+    return zoomFit ? fitScale() : zoomLevel;
+  }
+
+  function applyZoom() {
+    if (!imageLoaded) {
+      zoomReadout.textContent = "—";
+      zoomStatus.textContent = "";
+      return;
+    }
+    var z = currentZoom();
+    canvas.style.width = Math.max(1, Math.round(sourceCanvas.width * z)) + "px";
+    canvas.style.height = Math.max(1, Math.round(sourceCanvas.height * z)) + "px";
+    var pct = Math.round(z * 100) + "%";
+    zoomReadout.textContent = pct;
+    zoomStatus.textContent = "Zoom " + pct + (zoomFit ? " (fit)" : "");
+    zoomFitBtn.setAttribute("aria-pressed", zoomFit ? "true" : "false");
+  }
+
+  function setZoom(level, fit) {
+    zoomFit = !!fit;
+    if (!fit) zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level));
+    // The crop selection lives in display pixels; rescaling would misalign it.
+    if (cropActive && cropSel) clearCropSelection();
+    applyZoom();
+  }
+
+  function zoomIn() {
+    if (!imageLoaded) return;
+    var z = currentZoom();
+    for (var i = 0; i < ZOOM_STEPS.length; i++) {
+      if (ZOOM_STEPS[i] > z * 1.001) {
+        setZoom(ZOOM_STEPS[i], false);
+        return;
+      }
+    }
+    setZoom(ZOOM_MAX, false);
+  }
+
+  function zoomOut() {
+    if (!imageLoaded) return;
+    var z = currentZoom();
+    for (var i = ZOOM_STEPS.length - 1; i >= 0; i--) {
+      if (ZOOM_STEPS[i] < z * 0.999) {
+        setZoom(ZOOM_STEPS[i], false);
+        return;
+      }
+    }
+    setZoom(ZOOM_MIN, false);
+  }
+
+  zoomInBtn.addEventListener("click", zoomIn);
+  zoomOutBtn.addEventListener("click", zoomOut);
+  zoomFitBtn.addEventListener("click", function () {
+    if (imageLoaded) setZoom(1, true);
+  });
+  zoom100Btn.addEventListener("click", function () {
+    if (imageLoaded) setZoom(1, false);
+  });
+
+  window.addEventListener("resize", function () {
+    if (imageLoaded && zoomFit) applyZoom();
+  });
+
   // ---------- History ----------
   //
   // Every completed mutating operation (adjustment apply, finished brush
@@ -684,6 +855,21 @@
       if (key === "y" && !e.shiftKey) {
         e.preventDefault();
         redo();
+        return;
+      }
+      if (key === "=" || key === "+") {
+        e.preventDefault();
+        zoomIn();
+        return;
+      }
+      if (key === "-" || key === "_") {
+        e.preventDefault();
+        zoomOut();
+        return;
+      }
+      if (key === "0") {
+        e.preventDefault();
+        if (imageLoaded) setZoom(1, true);
         return;
       }
     }

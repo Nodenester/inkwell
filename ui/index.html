@@ -110,6 +110,46 @@
       </div>
     </section>
 
+    <section class="panel" id="transform-panel" aria-label="Transform">
+      <h2 class="panel-title">Transform</h2>
+
+      <div class="btn-row">
+        <button type="button" id="rotate-ccw" class="btn" disabled title="Rotate 90° counter-clockwise">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+            <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M6.7 2.5v4.2h4.2" fill="none" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          CCW
+        </button>
+        <button type="button" id="rotate-cw" class="btn" disabled title="Rotate 90° clockwise">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+            <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M17.3 2.5v4.2h-4.2" fill="none" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          CW
+        </button>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="flip-h" class="btn" disabled title="Flip horizontal">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+            <path d="M12 2v20" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.5 2.5" fill="none"/>
+            <path d="M9 7v10L3 12z" fill="currentColor"/>
+            <path d="M15 7v10l6-5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          Flip H
+        </button>
+        <button type="button" id="flip-v" class="btn" disabled title="Flip vertical">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+            <path d="M2 12h20" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.5 2.5" fill="none"/>
+            <path d="M7 9h10L12 3z" fill="currentColor"/>
+            <path d="M7 15h10l-5 6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          Flip V
+        </button>
+      </div>
+    </section>
+
     <section class="panel" id="resize-panel" aria-label="Resize">
       <h2 class="panel-title">Resize</h2>
 
@@ -131,11 +171,23 @@
       <button type="button" id="resize-apply" class="btn btn-primary" disabled>Apply Resize</button>
     </section>
 
-    <footer class="status">
-      <span id="image-info">No image</span>
-    </footer>
+    <section class="panel" id="view-panel" aria-label="View">
+      <h2 class="panel-title">View</h2>
+
+      <div class="zoom-row">
+        <button type="button" id="zoom-out" class="btn" disabled title="Zoom out (Ctrl+-)" aria-label="Zoom out">−</button>
+        <output id="zoom-readout" aria-live="polite">—</output>
+        <button type="button" id="zoom-in" class="btn" disabled title="Zoom in (Ctrl+=)" aria-label="Zoom in">+</button>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="zoom-fit" class="btn btn-toggle" aria-pressed="true" disabled>Fit <kbd>Ctrl+0</kbd></button>
+        <button type="button" id="zoom-100" class="btn" disabled>100%</button>
+      </div>
+    </section>
   </aside>
 
+  <div id="main-col">
   <main id="workspace" aria-label="Canvas workspace">
     <div id="drop-hint">
       <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
@@ -157,6 +209,11 @@
       </div>
     </div>
   </main>
+  <footer id="status-bar" class="status" aria-label="Status">
+    <span id="image-info">No image</span>
+    <span id="zoom-status"></span>
+  </footer>
+  </div>
 
   <script src="app.js"></script>
 </body>
