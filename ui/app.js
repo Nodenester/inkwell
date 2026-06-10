@@ -7,9 +7,18 @@
   var openBtn = document.getElementById("open-btn");
   var fileInput = document.getElementById("file-input");
   var downloadBtn = document.getElementById("download-btn");
+  var exportJpegBtn = document.getElementById("export-jpeg");
+  var jpegQualityInput = document.getElementById("jpeg-quality");
+  var jpegQualityValue = document.getElementById("jpeg-quality-value");
   var dropHint = document.getElementById("drop-hint");
   var canvasFrame = document.querySelector(".canvas-frame");
   var imageInfo = document.getElementById("image-info");
+  var fileError = document.getElementById("file-error");
+  var sidebar = document.getElementById("sidebar");
+  var sidebarToggle = document.getElementById("sidebar-toggle");
+  var helpBtn = document.getElementById("help-btn");
+  var helpCloseBtn = document.getElementById("help-close");
+  var helpDialog = document.getElementById("help-dialog");
 
   // Adjustments panel
   var brightnessInput = document.getElementById("adjust-brightness");
@@ -157,6 +166,8 @@
   function setLoadedState(loaded) {
     imageLoaded = loaded;
     downloadBtn.disabled = !loaded;
+    exportJpegBtn.disabled = !loaded;
+    jpegQualityInput.disabled = !loaded;
     adjustControls.forEach(function (el) { el.disabled = !loaded; });
     brushControls.forEach(function (el) { el.disabled = !loaded; });
     resizeControls.forEach(function (el) { el.disabled = !loaded; });
@@ -176,8 +187,46 @@
     applyZoom();
   }
 
+  // ---------- File errors ----------
+
+  var fileErrorTimer = null;
+
+  function showFileError(message) {
+    fileError.textContent = message;
+    fileError.hidden = false;
+    if (fileErrorTimer) clearTimeout(fileErrorTimer);
+    fileErrorTimer = setTimeout(hideFileError, 6000);
+  }
+
+  function hideFileError() {
+    if (fileErrorTimer) {
+      clearTimeout(fileErrorTimer);
+      fileErrorTimer = null;
+    }
+    fileError.hidden = true;
+  }
+
+  function fileLabel(file) {
+    return file && file.name ? "“" + file.name + "”" : "That file";
+  }
+
+  // Base name of the opened file (no extension) — used to name exports.
+  var exportBaseName = "inkwell";
+
+  function baseNameOf(name) {
+    var base = String(name || "").replace(/\.[^.]*$/, "").trim();
+    return base || "inkwell";
+  }
+
   function loadFile(file) {
-    if (!file || file.type.indexOf("image/") !== 0) return;
+    if (!file) {
+      showFileError("Nothing usable was dropped. Drag an image file from your computer.");
+      return;
+    }
+    if (!file.type || file.type.indexOf("image/") !== 0) {
+      showFileError(fileLabel(file) + " isn’t an image. Try a PNG, JPEG, GIF, or WebP file.");
+      return;
+    }
     var url = URL.createObjectURL(file);
     var img = new Image();
     img.onload = function () {
@@ -186,15 +235,18 @@
       sourceCanvas.height = img.naturalHeight;
       sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
       sourceCtx.drawImage(img, 0, 0);
+      exportBaseName = baseNameOf(file.name);
+      hideFileError();
       setLoadedState(true);
       resetControls();
       render();
+      // A replacement image starts a fresh editing session.
       clearHistory();
       pushHistory();
     };
     img.onerror = function () {
       URL.revokeObjectURL(url);
-      imageInfo.textContent = "Could not load that file";
+      showFileError("Could not read " + fileLabel(file) + " — it may be corrupted or an unsupported format.");
     };
     img.src = url;
   }
@@ -203,12 +255,31 @@
     fileInput.click();
   }
 
+  function triggerDownload(filename, dataUrl) {
+    var link = document.createElement("a");
+    link.download = filename;
+    link.href = dataUrl;
+    link.click();
+  }
+
   function downloadPNG() {
     if (!imageLoaded) return;
-    var link = document.createElement("a");
-    link.download = "inkwell.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    triggerDownload(exportBaseName + ".png", canvas.toDataURL("image/png"));
+  }
+
+  function downloadJPEG() {
+    if (!imageLoaded) return;
+    var quality = Math.min(100, Math.max(1, sliderValue(jpegQualityInput) || 90)) / 100;
+    // JPEG has no alpha channel — composite onto white so transparent areas
+    // don't come out black.
+    var tmp = document.createElement("canvas");
+    tmp.width = canvas.width;
+    tmp.height = canvas.height;
+    var t = tmp.getContext("2d");
+    t.fillStyle = "#ffffff";
+    t.fillRect(0, 0, tmp.width, tmp.height);
+    t.drawImage(canvas, 0, 0);
+    triggerDownload(exportBaseName + ".jpg", tmp.toDataURL("image/jpeg", quality));
   }
 
   // ---------- Brush ----------
@@ -789,6 +860,43 @@
   openBtn.addEventListener("click", openPicker);
   dropHint.addEventListener("click", openPicker);
   downloadBtn.addEventListener("click", downloadPNG);
+  exportJpegBtn.addEventListener("click", downloadJPEG);
+
+  jpegQualityInput.addEventListener("input", function () {
+    jpegQualityValue.textContent = jpegQualityInput.value;
+  });
+
+  // ---------- Help dialog ----------
+
+  function helpOpen() {
+    return helpDialog.hasAttribute("open");
+  }
+
+  function openHelp() {
+    if (helpOpen()) return;
+    if (typeof helpDialog.showModal === "function") helpDialog.showModal();
+    else helpDialog.setAttribute("open", "");
+  }
+
+  function closeHelp() {
+    if (!helpOpen()) return;
+    if (typeof helpDialog.close === "function") helpDialog.close();
+    else helpDialog.removeAttribute("open");
+  }
+
+  helpBtn.addEventListener("click", openHelp);
+  helpCloseBtn.addEventListener("click", closeHelp);
+  // A click on the backdrop (the dialog element itself, not its content) closes.
+  helpDialog.addEventListener("click", function (e) {
+    if (e.target === helpDialog) closeHelp();
+  });
+
+  // ---------- Sidebar collapse (narrow viewports) ----------
+
+  sidebarToggle.addEventListener("click", function () {
+    var open = sidebar.classList.toggle("open");
+    sidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 
   sliders.forEach(function (input) {
     input.addEventListener("input", function () {
@@ -826,9 +934,20 @@
   workspace.addEventListener("drop", function (e) {
     e.preventDefault();
     workspace.classList.remove("dragover");
-    if (e.dataTransfer && e.dataTransfer.files.length) {
-      loadFile(e.dataTransfer.files[0]);
+    var files = e.dataTransfer ? e.dataTransfer.files : null;
+    if (!files || !files.length) {
+      showFileError("Nothing usable was dropped. Drag an image file from your computer.");
+      return;
     }
+    // If several files were dropped, take the first image among them.
+    var file = null;
+    for (var i = 0; i < files.length; i++) {
+      if (files[i].type && files[i].type.indexOf("image/") === 0) {
+        file = files[i];
+        break;
+      }
+    }
+    loadFile(file || files[0]);
   });
 
   // A drop anywhere else (e.g. the sidebar) must not navigate away
@@ -837,13 +956,28 @@
 
   // Keyboard shortcuts
   window.addEventListener("keydown", function (e) {
+    var targetEl = e.target;
+    var typing = targetEl && (targetEl.tagName === "INPUT" || targetEl.tagName === "TEXTAREA");
+    if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey && !typing) {
+      e.preventDefault();
+      if (helpOpen()) closeHelp();
+      else openHelp();
+      return;
+    }
     if (e.key === "Escape") {
+      if (helpOpen()) {
+        // Modal dialogs close themselves on Esc; this covers the fallback.
+        closeHelp();
+        return;
+      }
       if (cropActive) {
         e.preventDefault();
         setCropActive(false);
       }
       return;
     }
+    // Editor shortcuts are paused while the help dialog is up.
+    if (helpOpen()) return;
     var key = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
       if (key === "z") {
@@ -874,8 +1008,6 @@
       }
     }
     if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (key === "b" || key === "c")) {
-      var target = e.target;
-      var typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
       if (!typing && imageLoaded) {
         e.preventDefault();
         if (key === "b") setBrushActive(!brushActive);

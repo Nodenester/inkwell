@@ -14,6 +14,15 @@
         <path d="M12 2C12 2 5 10.5 5 15a7 7 0 0 0 14 0c0-4.5-7-13-7-13z" fill="currentColor"/>
       </svg>
       <h1>Inkwell</h1>
+      <div class="brand-actions">
+        <button type="button" id="help-btn" class="icon-btn" title="Keyboard shortcuts (?)" aria-haspopup="dialog" aria-controls="help-dialog">?</button>
+        <button type="button" id="sidebar-toggle" class="icon-btn" title="Show or hide tools" aria-expanded="false" aria-controls="sidebar">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="visually-hidden">Toggle tools</span>
+        </button>
+      </div>
     </header>
 
     <section class="panel" aria-label="File">
@@ -24,6 +33,12 @@
       <button type="button" id="download-btn" class="btn" disabled>
         Download PNG <kbd>Ctrl+S</kbd>
       </button>
+      <div class="slider-row">
+        <label for="jpeg-quality">JPEG quality</label>
+        <output class="slider-value" id="jpeg-quality-value" for="jpeg-quality">90</output>
+        <input type="range" id="jpeg-quality" min="1" max="100" step="1" value="90" disabled>
+      </div>
+      <button type="button" id="export-jpeg" class="btn" disabled>Export JPEG</button>
       <input type="file" accept="image/*" id="file-input" hidden>
     </section>
 
@@ -188,6 +203,7 @@
   </aside>
 
   <div id="main-col">
+  <div id="file-error" role="alert" hidden></div>
   <main id="workspace" aria-label="Canvas workspace">
     <div id="drop-hint">
       <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
@@ -214,6 +230,39 @@
     <span id="zoom-status"></span>
   </footer>
   </div>
+
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <div class="help-body">
+      <header class="help-head">
+        <h2 id="help-title">Keyboard shortcuts</h2>
+        <button type="button" id="help-close" class="icon-btn" aria-label="Close help">×</button>
+      </header>
+      <dl class="shortcut-list">
+        <dt><kbd>Ctrl</kbd> + <kbd>O</kbd></dt>
+        <dd>Open an image</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt>
+        <dd>Download as PNG</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt>
+        <dd>Undo</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>Y</kbd></dt>
+        <dd>Redo (also <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd>)</dd>
+        <dt><kbd>B</kbd></dt>
+        <dd>Toggle the brush</dd>
+        <dt><kbd>C</kbd></dt>
+        <dd>Toggle crop mode</dd>
+        <dt><kbd>Esc</kbd></dt>
+        <dd>Cancel crop / close this dialog</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>+</kbd></dt>
+        <dd>Zoom in</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>−</kbd></dt>
+        <dd>Zoom out</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>0</kbd></dt>
+        <dd>Fit image to view</dd>
+        <dt><kbd>?</kbd></dt>
+        <dd>Open this help</dd>
+      </dl>
+    </div>
+  </dialog>
 
   <script src="app.js"></script>
 </body>
