@@ -50,12 +50,17 @@
 
   var resizeControls = [resizeWidthInput, resizeHeightInput, resizeLockBtn, resizeApplyBtn];
 
+  // History panel
+  var undoBtn = document.getElementById("undo-btn");
+  var redoBtn = document.getElementById("redo-btn");
+
   var imageLoaded = false;
 
   // The untouched ("baked") image lives on an offscreen canvas; the visible
   // canvas always shows it rendered through the current adjustment filters.
   var sourceCanvas = document.createElement("canvas");
-  var sourceCtx = sourceCanvas.getContext("2d");
+  // History snapshots read this canvas back after every edit.
+  var sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
 
   function sliderValue(input) {
     var n = Number(input.value);
@@ -107,6 +112,8 @@
 
   function applyAdjustments() {
     if (!imageLoaded) return;
+    // Nothing to bake (and no history entry) when every control is neutral.
+    if (filterString() === "none") return;
     render();
     // The visible canvas now holds the filtered pixels — bake them in.
     sourceCanvas.width = canvas.width;
@@ -114,6 +121,7 @@
     sourceCtx.drawImage(canvas, 0, 0);
     resetControls();
     render();
+    pushHistory();
   }
 
   function resetAdjustments() {
@@ -139,6 +147,7 @@
     if (loaded) syncResizeInputs();
     dropHint.hidden = loaded;
     canvasFrame.hidden = !loaded;
+    updateHistoryButtons();
     updateImageInfo();
   }
 
@@ -155,6 +164,8 @@
       setLoadedState(true);
       resetControls();
       render();
+      clearHistory();
+      pushHistory();
     };
     img.onerror = function () {
       URL.revokeObjectURL(url);
@@ -258,6 +269,7 @@
     lastPoint = null;
     // Resync the preview so strokes pass through any live filters too.
     render();
+    pushHistory();
   }
 
   canvas.addEventListener("pointerdown", function (e) {
@@ -406,6 +418,7 @@
     syncResizeInputs();
     render();
     updateImageInfo();
+    pushHistory();
   }
 
   cropOverlay.addEventListener("pointerdown", function (e) {
@@ -483,6 +496,7 @@
     aspectRatio = w / h;
     render();
     updateImageInfo();
+    pushHistory();
   }
 
   resizeWidthInput.addEventListener("input", function () {
@@ -518,6 +532,88 @@
   });
 
   resizeApplyBtn.addEventListener("click", applyResize);
+
+  // ---------- History ----------
+  //
+  // Every completed mutating operation (adjustment apply, finished brush
+  // stroke, crop, resize) snapshots the baked image. Undo/redo move a cursor
+  // through those snapshots and copy the chosen one back into sourceCanvas.
+
+  var MAX_HISTORY = 25;
+  // Pixel snapshots are uncompressed (4 bytes/px), so besides the state-count
+  // cap, keep the whole stack under a byte budget for very large images.
+  var MAX_HISTORY_BYTES = 256 * 1024 * 1024;
+  var historyStates = [];
+  var historyIndex = -1;
+
+  function snapshotState() {
+    return {
+      width: sourceCanvas.width,
+      height: sourceCanvas.height,
+      data: sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height)
+    };
+  }
+
+  function historyBytes() {
+    return historyStates.reduce(function (sum, s) {
+      return sum + s.data.data.length;
+    }, 0);
+  }
+
+  function updateHistoryButtons() {
+    undoBtn.disabled = !imageLoaded || historyIndex <= 0;
+    redoBtn.disabled = !imageLoaded || historyIndex >= historyStates.length - 1;
+  }
+
+  function clearHistory() {
+    historyStates = [];
+    historyIndex = -1;
+    updateHistoryButtons();
+  }
+
+  function pushHistory() {
+    if (!imageLoaded) return;
+    // A new edit invalidates any redo branch.
+    historyStates.splice(historyIndex + 1);
+    historyStates.push(snapshotState());
+    while (historyStates.length > MAX_HISTORY) historyStates.shift();
+    while (historyStates.length > 2 && historyBytes() > MAX_HISTORY_BYTES) {
+      historyStates.shift();
+    }
+    historyIndex = historyStates.length - 1;
+    updateHistoryButtons();
+  }
+
+  function restoreState(state) {
+    sourceCanvas.width = state.width;
+    sourceCanvas.height = state.height;
+    sourceCtx.putImageData(state.data, 0, 0);
+    // Live (unapplied) adjustments would re-filter the restored pixels, so
+    // drop them: undo/redo must show the recorded canvas exactly.
+    resetControls();
+    if (cropActive) setCropActive(false);
+    syncResizeInputs();
+    render();
+    updateImageInfo();
+  }
+
+  function undo() {
+    if (!imageLoaded || stroking || cropDragging || historyIndex <= 0) return;
+    historyIndex -= 1;
+    restoreState(historyStates[historyIndex]);
+    updateHistoryButtons();
+  }
+
+  function redo() {
+    if (!imageLoaded || stroking || cropDragging) return;
+    if (historyIndex >= historyStates.length - 1) return;
+    historyIndex += 1;
+    restoreState(historyStates[historyIndex]);
+    updateHistoryButtons();
+  }
+
+  undoBtn.addEventListener("click", undo);
+  redoBtn.addEventListener("click", redo);
 
   openBtn.addEventListener("click", openPicker);
   dropHint.addEventListener("click", openPicker);
@@ -578,6 +674,19 @@
       return;
     }
     var key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      if (key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (key === "y" && !e.shiftKey) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+    }
     if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (key === "b" || key === "c")) {
       var target = e.target;
       var typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
