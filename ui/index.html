@@ -3,20 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Inkwell — bootstrap</title>
-<style>
-  body{font-family:Georgia,serif;background:#fbf8f1;color:#23201a;max-width:780px;margin:3rem auto;padding:0 1rem;line-height:1.6}
-  h1{color:#9a6b1f}
-  code{background:#efe9dc;padding:.1em .3em;border-radius:3px;font-family:Consolas,monospace}
-  small{color:#857d6b}
-</style>
+<title>Inkwell</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2C12 2 5 10.5 5 15a7 7 0 0 0 14 0c0-4.5-7-13-7-13z' fill='%235b8def'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<h1>Inkwell</h1>
-<p>This is the <b>bootstrap page</b>. A fleet of Fable&nbsp;5 agents is building the real
-Markdown previewer here — a planner sets the work, a coder writes it, an adversarial
-tester verifies it, and a deterministic gate ships it.</p>
-<p><small>Pure static, no dependencies · repo:
-<a href="https://github.com/Nodenester/inkwell">Nodenester/inkwell</a></small></p>
+  <aside id="sidebar" aria-label="Tools">
+    <header class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path d="M12 2C12 2 5 10.5 5 15a7 7 0 0 0 14 0c0-4.5-7-13-7-13z" fill="currentColor"/>
+      </svg>
+      <h1>Inkwell</h1>
+    </header>
+
+    <section class="panel" aria-label="File">
+      <h2 class="panel-title">File</h2>
+      <button type="button" id="open-btn" class="btn btn-primary">
+        Open Image <kbd>Ctrl+O</kbd>
+      </button>
+      <button type="button" id="download-btn" class="btn" disabled>
+        Download PNG <kbd>Ctrl+S</kbd>
+      </button>
+      <input type="file" accept="image/*" id="file-input" hidden>
+    </section>
+
+    <footer class="status">
+      <span id="image-info">No image</span>
+    </footer>
+  </aside>
+
+  <main id="workspace" aria-label="Canvas workspace">
+    <div id="drop-hint">
+      <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+        <rect x="6" y="10" width="36" height="28" rx="3" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
+        <circle cx="17" cy="20" r="3.5" fill="currentColor"/>
+        <path d="M10 34l9-9 6 6 7-8 6 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+      <p class="hint-main">Drop an image here</p>
+      <p class="hint-sub">or press <strong>Open Image</strong> (Ctrl+O) to browse</p>
+    </div>
+    <div class="canvas-frame" hidden>
+      <canvas id="canvas"></canvas>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
 </body>
 </html>
