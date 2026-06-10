@@ -212,6 +212,42 @@ input[type="range"]:focus-visible {
   gap: 8px;
 }
 
+/* ---------- Brush panel ---------- */
+
+.color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.color-row label {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+input[type="color"] {
+  width: 52px;
+  height: 26px;
+  padding: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+input[type="color"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input[type="color"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .btn-row .btn {
   justify-content: center;
 }
@@ -318,6 +354,12 @@ input[type="range"]:focus-visible {
   /* checkerboard so transparent pixels read as transparency */
   background:
     conic-gradient(#23272f 0 25%, #181b21 0 50%, #23272f 0 75%, #181b21 0) 0 0 / 18px 18px;
+}
+
+#canvas.brush-active {
+  cursor: crosshair;
+  /* let pointermove paint instead of scrolling/zooming on touch */
+  touch-action: none;
 }
 
 /* ---------- Narrow viewports ---------- */

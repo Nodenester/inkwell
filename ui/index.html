@@ -65,6 +65,30 @@
       </div>
     </section>
 
+    <section class="panel" id="brush-panel" aria-label="Brush">
+      <h2 class="panel-title">Brush</h2>
+
+      <button type="button" id="brush-toggle" class="btn btn-toggle" aria-pressed="false" disabled>
+        Brush <kbd>B</kbd>
+      </button>
+
+      <div class="color-row">
+        <label for="brush-color">Color</label>
+        <input type="color" id="brush-color" value="#5b8def" disabled>
+      </div>
+
+      <div class="slider-row">
+        <label for="brush-size">Size</label>
+        <output class="slider-value" id="brush-size-value" for="brush-size">12</output>
+        <input type="range" id="brush-size" min="1" max="100" step="1" value="12" disabled>
+      </div>
+
+      <div class="btn-row" role="group" aria-label="Brush mode">
+        <button type="button" id="brush-mode-paint" class="btn btn-toggle" aria-pressed="true" disabled>Paint</button>
+        <button type="button" id="brush-mode-erase" class="btn btn-toggle" aria-pressed="false" disabled>Erase</button>
+      </div>
+    </section>
+
     <footer class="status">
       <span id="image-info">No image</span>
     </footer>
