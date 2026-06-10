@@ -27,6 +27,44 @@
       <input type="file" accept="image/*" id="file-input" hidden>
     </section>
 
+    <section class="panel" id="adjust-panel" aria-label="Adjust">
+      <h2 class="panel-title">Adjust</h2>
+
+      <div class="slider-row">
+        <label for="adjust-brightness">Brightness</label>
+        <output class="slider-value" id="brightness-value" for="adjust-brightness">0</output>
+        <input type="range" id="adjust-brightness" min="-100" max="100" step="1" value="0" disabled>
+      </div>
+
+      <div class="slider-row">
+        <label for="adjust-contrast">Contrast</label>
+        <output class="slider-value" id="contrast-value" for="adjust-contrast">0</output>
+        <input type="range" id="adjust-contrast" min="-100" max="100" step="1" value="0" disabled>
+      </div>
+
+      <div class="slider-row">
+        <label for="adjust-saturation">Saturation</label>
+        <output class="slider-value" id="saturation-value" for="adjust-saturation">0</output>
+        <input type="range" id="adjust-saturation" min="-100" max="100" step="1" value="0" disabled>
+      </div>
+
+      <div class="slider-row">
+        <label for="adjust-blur">Blur</label>
+        <output class="slider-value" id="blur-value" for="adjust-blur">0</output>
+        <input type="range" id="adjust-blur" min="0" max="20" step="1" value="0" disabled>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="toggle-grayscale" class="btn btn-toggle" aria-pressed="false" disabled>Grayscale</button>
+        <button type="button" id="toggle-invert" class="btn btn-toggle" aria-pressed="false" disabled>Invert</button>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="apply-adjust" class="btn btn-primary" disabled>Apply</button>
+        <button type="button" id="reset-adjust" class="btn" disabled>Reset</button>
+      </div>
+    </section>
+
     <footer class="status">
       <span id="image-info">No image</span>
     </footer>
